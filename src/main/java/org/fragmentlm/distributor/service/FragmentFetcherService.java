@@ -3,7 +3,6 @@ package org.fragmentlm.distributor.service;
 import org.fragmentlm.distributor.dto.FragmentFetcherServiceReply;
 import org.fragmentlm.distributor.dto.PeerReply;
 import org.fragmentlm.distributor.dto.WeightedFragment;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientException;
