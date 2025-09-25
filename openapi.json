@@ -1,0 +1,120 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "FragmentLM Distributor API",
+    "version": "1.0.0",
+    "description": "FragmentLM service for distributing fragments."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:50420/fragmentlm/"
+    }
+  ],
+  "paths": {
+    "/fragmentlm/distribute-fragments": {
+      "post": {
+        "summary": "Distribute fragments for processing across peers",
+        "requestBody": {
+          "required": true,
+          "description": "List of weighted fragments",
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/DistributorRequest"
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "A map of processed fragments to the IP addresses of their nodes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcessedFragments"
+                }
+              }
+            }
+          },
+          "206": {
+            "description": "A partially filled map of processed fragments to the IP addresses of their nodes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcessedFragments"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/fragmentlm/get-fragments": {
+      "get": {
+        "summary": "Retrieve a partial map of peer replies",
+        "responses": {
+          "200": {
+            "description": "A map of processed fragments to the IP addresses of their nodes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcessedFragments"
+                }
+              }
+            }
+          },
+          "206": {
+            "description": "A partially filled map of processed fragments to the IP addresses of their nodes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcessedFragments"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "WeightedFragment": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "format": "ipv4"
+          },
+          "fragment": {
+            "type": "string",
+            "format": "byte"
+          }
+        },
+        "required": ["address", "fragment"]
+      },
+      "DistributorRequest": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/WeightedFragment"
+        }
+      },
+      "PeerReply": {
+        "type": "object",
+        "properties": {
+          "errorCode": {
+            "type": "integer"
+          },
+          "reply": {
+            "type": "string"
+          }
+        },
+        "required": ["errorCode", "reply"]
+      },
+      "ProcessedFragments": {
+        "type": "object",
+        "additionalProperties": {
+          "$ref": "#/components/schemas/PeerReply"
+        }
+      }
+    }
+  }
+}
