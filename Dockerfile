@@ -25,7 +25,7 @@ WORKDIR /app
 COPY --from=build /app/build/libs/*.jar app.jar
 
 # Expose the application port
-EXPOSE 50420
+EXPOSE 50420/tcp
 
 # Command to run the application
 ENTRYPOINT ["java", "-jar", "app.jar"]
