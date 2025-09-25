@@ -33,7 +33,6 @@ test {
     useJUnitPlatform()
 }
 
-// Optional: reduce jar size / avoid duplicated resources warnings
 tasks.named('jar') {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }

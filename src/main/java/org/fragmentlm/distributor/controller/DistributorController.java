@@ -1,19 +1,34 @@
 package org.fragmentlm.distributor.controller;
 
 import org.fragmentlm.distributor.dto.DistributorRequest;
-import org.fragmentlm.distributor.dto.DistributorResponse;
+import org.fragmentlm.distributor.dto.PeerReply;
+import org.fragmentlm.distributor.service.FragmentFetcherService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 @RestController
+@RequestMapping("/fragmentlm")
 public class DistributorController
 {
-    @PostMapping("/distributor")
-    public ResponseEntity<DistributorResponse> handleRequest(@RequestBody DistributorRequest request)
+    private final FragmentFetcherService service;
+
+    public DistributorController (FragmentFetcherService service)
     {
-        final DistributorResponse response = new DistributorResponse("Test info");
-        System.out.println(request);
-        return new ResponseEntity<>(response, HttpStatus.OK);
+        this.service = service;
+    }
+
+    @PostMapping("/distribute-fragments")
+    public ResponseEntity<Map<String, PeerReply>> distributeFragments (@RequestBody DistributorRequest request)
+    {
+        return new ResponseEntity<>(service.sendRequests(request.fragments()), HttpStatus.OK);
+    }
+
+    @GetMapping("/get-fragments")
+    public ResponseEntity<Map<String, PeerReply>> getFragments ()
+    {
+        return new ResponseEntity<>(service.getResponses(), HttpStatus.OK);
     }
 }
