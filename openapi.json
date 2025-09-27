@@ -7,11 +7,11 @@
   },
   "servers": [
     {
-      "url": "http://localhost:50420/fragmentlm/"
+      "url": "http://localhost:50420/fragmentlm"
     }
   ],
   "paths": {
-    "/fragmentlm/distribute-fragments": {
+    "/distribute-fragments": {
       "post": {
         "summary": "Distribute fragments for processing across peers",
         "requestBody": {
@@ -47,7 +47,7 @@
         }
       }
     },
-    "/fragmentlm/get-fragments": {
+    "/get-fragments": {
       "get": {
         "summary": "Retrieve a partial map of peer replies",
         "responses": {
@@ -95,7 +95,8 @@
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/WeightedFragment"
-        }
+        },
+        "minItems": 1
       },
       "PeerReply": {
         "type": "object",
