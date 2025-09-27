@@ -16,7 +16,7 @@ import java.util.concurrent.CountDownLatch;
  * Service to manage connection with the peers
  */
 @Service
-public class FragmentFetcherService
+public class FragmentFetcherService implements IPeerConnectionService
 {
     private final RestTemplate restTemplate;
     private final FragmentFetcherServiceReply replyObject = new FragmentFetcherServiceReply(new ConcurrentHashMap<>());

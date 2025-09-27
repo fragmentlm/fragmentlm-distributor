@@ -2,7 +2,7 @@ package org.fragmentlm.distributor.controller;
 
 import org.fragmentlm.distributor.dto.DistributorRequest;
 import org.fragmentlm.distributor.dto.FragmentFetcherServiceReply;
-import org.fragmentlm.distributor.service.FragmentFetcherService;
+import org.fragmentlm.distributor.service.IPeerConnectionService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -11,9 +11,9 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/fragmentlm")
 public class DistributorController
 {
-    private final FragmentFetcherService service;
+    private final IPeerConnectionService service;
 
-    public DistributorController (FragmentFetcherService service)
+    public DistributorController (IPeerConnectionService service)
     {
         this.service = service;
     }
