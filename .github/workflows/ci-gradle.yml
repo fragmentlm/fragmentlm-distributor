@@ -43,4 +43,24 @@ jobs:
         run: ./gradlew bootJar --no-daemon --console=plain -x test
 
       - name: Run tests
-        run: ./gradlew test
+        id: test
+        run: |
+          set -o pipefail
+          ./gradlew test --no-daemon --console=plain | tee gradle-test-output.txt
+        continue-on-error: true
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: |
+            build/reports/tests
+            build/test-results
+            gradle-test-output.txt
+
+      - name: Fail workflow if tests failed
+        if: steps.test.outcome != 'success'
+        run: |
+          echo "Tests failed — failing workflow"
+          exit 1
