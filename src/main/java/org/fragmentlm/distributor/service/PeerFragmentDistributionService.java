@@ -6,96 +6,114 @@ import jakarta.validation.constraints.NotNull;
 import org.fragmentlm.distributor.dto.PeerReply;
 import org.fragmentlm.distributor.dto.ProcessedFragments;
 import org.fragmentlm.distributor.dto.WeightedFragment;
-import org.springframework.http.ResponseEntity;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClientException;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.reactive.function.client.ExchangeStrategies;
+import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.util.retry.Retry;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.time.Duration;
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Service to manage connection with the peers
- */
 @Service
 public class PeerFragmentDistributionService implements IPeerConnectionService
 {
-    private final ProcessedFragments replyObject;
-    private final RestTemplate restTemplate;
+    private static final Logger logger = LoggerFactory.getLogger(PeerFragmentDistributionService.class);
 
-    public PeerFragmentDistributionService (ProcessedFragments replyObject, RestTemplate restTemplate)
-    {
-        this.replyObject = replyObject;
-        this.restTemplate = restTemplate;
+    private final WebClient webClient;
+    private final ObjectMapper objectMapper;
+    private final Duration requestTimeout;
+    private final Retry retrySpec;
+
+    public PeerFragmentDistributionService(@NotNull WebClient webClient, @NotNull ObjectMapper objectMapper, @NotNull Duration requestTimeout, @NotNull Retry retrySpec) {
+        this.webClient = webClient;
+        this.objectMapper = objectMapper;
+        this.requestTimeout = requestTimeout;
+        this.retrySpec = retrySpec;
     }
 
-    /**
-     * Sends the fragments to the peers
-     *
-     * @param requests list of fragments to be sent
-     * @return map of peer replies to their addresses
-     */
-    public @NotNull ProcessedFragments sendRequests (@NotNull List<WeightedFragment> requests)
-    {
-        CountDownLatch latch = new CountDownLatch(requests.size());
-        requests.forEach((weightedFragment) ->
-        {
-            final String ip = weightedFragment.address();
-            final String fragment = weightedFragment.fragment();
-            Thread.ofVirtual().start(() ->
-            {
-                final String url = buildUrlString(ip, "/fragmentlm/worker");
-                final ObjectMapper mapper = new ObjectMapper();
-                final ObjectNode root = mapper.createObjectNode();
-                root.put("fragment", fragment);
-                final String jsonRequest = root.toString();
-                try
-                {
-                    final ResponseEntity<PeerReply> reply = restTemplate.postForEntity(url, jsonRequest, PeerReply.class);
-                    if (!reply.getStatusCode().is2xxSuccessful())
-                    {
-                        replyObject.mappedReplies().put(ip, new PeerReply(reply.getStatusCode().value(), ""));
-                        return;
-                    }
-                    replyObject.mappedReplies().put(ip, reply.getBody());
-                } catch (RestClientException e)
-                {
-                    System.err.println(e.getMessage());
+    @Override
+    public CompletableFuture<PeerReply> sendFragment(@NotNull URI url, @NotNull String requestJsonString) {
+        return webClient.post()
+            .uri(url)
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(requestJsonString)
+            .retrieve()
+            .bodyToMono(PeerReply.class)
+            .timeout(requestTimeout)
+            .retryWhen(retrySpec)
+            .onErrorResume(throwable -> {
+                int status = HttpStatus.INTERNAL_SERVER_ERROR.value();
+                if (throwable instanceof WebClientResponseException) {
+                    status = ((WebClientResponseException) throwable).getStatusCode().value();
                 }
-                latch.countDown();
+                logger.warn("request to {} failed: {}", url, throwable.getMessage());
+                return Mono.just(new PeerReply(status, ""));
+            })
+            .toFuture();
+    }
+
+    @Override
+    public @NotNull CompletableFuture<ProcessedFragments> distributeRequest(@NotNull List<WeightedFragment> requests) {
+        Flux<Map.Entry<String, Mono<PeerReply>>> entriesFlux = Flux.fromIterable(requests)
+            .map(wf -> {
+                URI url = buildUrl(wf.address(), "/fragmentlm/worker");
+                if (url == null) {
+                    return Map.entry("INVALID_URI:" + wf.address(), Mono.just(new PeerReply(HttpStatus.BAD_REQUEST.value(), "")));
+                }
+                ObjectNode jsonObj = objectMapper.createObjectNode().put("fragment", wf.fragment());
+                String json = jsonObj.toString();
+                return Map.entry(url.toString(), Mono.fromFuture(sendFragment(url, json)));
             });
-        });
-        try
-        {
-            latch.await();
-        } catch (InterruptedException e)
-        {
-            return replyObject;
-        }
-        return replyObject;
+
+        return entriesFlux
+            .collectMap(Map.Entry::getKey, Map.Entry::getValue)
+            .flatMap(map -> {
+                List<Mono<Pair>> monos = map.entrySet().stream()
+                    .map(e -> e.getValue()
+                        .map(reply -> new Pair(e.getKey(), reply))
+                        .onErrorResume(ex -> {
+                            logger.warn("error collecting reply for {}: {}", e.getKey(), ex.getMessage());
+                            return Mono.just(new Pair(e.getKey(), new PeerReply(HttpStatus.INTERNAL_SERVER_ERROR.value(), "")));
+                        }))
+                    .toList();
+
+                return Flux.mergeSequential(monos)
+                    .collectMap(pair -> pair.key, pair -> pair.reply);
+            })
+            .map(resultMap -> {
+                Map<String, PeerReply> clean = new ConcurrentHashMap<>();
+                resultMap.forEach((k, v) -> {
+                    if (!k.startsWith("INVALID_URI:")) {
+                        clean.put(k, v);
+                    }
+                });
+                return new ProcessedFragments(clean);
+            })
+            .toFuture();
     }
 
-    private static @NotNull String buildUrlString (@NotNull String address, @NotNull String path)
-    {
-        try
-        {
-            final URI uri = new URI("http", address, path, null);
-            return uri.toString();
-        } catch (URISyntaxException e)
-        {
-            return "";
+    private static @NotNull URI buildUrl(@NotNull String address, @NotNull String path) {
+        try {
+            return new URI("http", address, path, null);
+        } catch (URISyntaxException e) {
+            logger.warn("Invalid address for URL construction: {}", address);
+            return null;
         }
     }
 
-    /**
-     * Gets currently present reply object
-     *
-     * @return partially filled reply
-     */
-    public @NotNull ProcessedFragments getResponses ()
+    private record Pair(String key, PeerReply reply)
     {
-        return replyObject;
     }
 }

@@ -1,33 +1,53 @@
 package org.fragmentlm.distributor.configuration;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.constraints.NotNull;
-import org.fragmentlm.distributor.dto.ProcessedFragments;
-import org.fragmentlm.distributor.service.PeerFragmentDistributionService;
-import org.fragmentlm.distributor.service.IPeerConnectionService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.reactive.function.client.ExchangeStrategies;
+import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
+import reactor.util.retry.Retry;
 
-import java.util.concurrent.ConcurrentHashMap;
+import java.time.Duration;
 
 @Configuration
 public class PeerConnectionServiceConfig
 {
     @Bean
-    public IPeerConnectionService service (@NotNull ProcessedFragments replyObject, @NotNull RestTemplate restTemplate)
+    public @NotNull WebClient webClient ()
     {
-        return new PeerFragmentDistributionService(replyObject, restTemplate);
+        final ExchangeStrategies strategies = ExchangeStrategies.builder()
+            .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(16 * 1024 * 1024))
+            .build();
+        return WebClient.builder()
+            .exchangeStrategies(strategies)
+            .build();
     }
 
     @Bean
-    public @NotNull RestTemplate restTemplate ()
+    public ObjectMapper mapper ()
     {
-        return new RestTemplate();
+        return new ObjectMapper();
     }
 
     @Bean
-    public @NotNull ProcessedFragments reply ()
+    public Duration retryDuration()
     {
-        return new ProcessedFragments(new ConcurrentHashMap<>());
+        return Duration.ofSeconds(30);
+    }
+
+    @Bean
+    public Retry retrySpec()
+    {
+        return Retry.backoff(2, Duration.ofMillis(200))
+            .maxBackoff(Duration.ofSeconds(1))
+            .filter(throwable -> {
+                if (throwable instanceof WebClientResponseException responseException) {
+                    var status = responseException.getStatusCode();
+                    return status.is5xxServerError();
+                }
+                return true;
+            });
     }
 }
