@@ -1,5 +1,7 @@
 package org.fragmentlm.distributor.dto;
 
-public record WeightedFragment(String address, String fragment)
+import jakarta.validation.constraints.NotNull;
+
+public record WeightedFragment(@NotNull String address, @NotNull String fragment)
 {
 }

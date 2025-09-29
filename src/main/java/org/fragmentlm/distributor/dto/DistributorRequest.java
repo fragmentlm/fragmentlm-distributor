@@ -1,9 +1,11 @@
 package org.fragmentlm.distributor.dto;
 
+import jakarta.validation.constraints.NotNull;
+
 import java.util.List;
 
 public record DistributorRequest(
-    List<WeightedFragment> fragments
+    @NotNull List<WeightedFragment> fragments
 )
 {
 }

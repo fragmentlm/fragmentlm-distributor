@@ -1,7 +1,8 @@
 package org.fragmentlm.distributor.controller;
 
+import jakarta.validation.constraints.NotNull;
 import org.fragmentlm.distributor.dto.DistributorRequest;
-import org.fragmentlm.distributor.dto.FragmentFetcherServiceReply;
+import org.fragmentlm.distributor.dto.ProcessedFragments;
 import org.fragmentlm.distributor.service.IPeerConnectionService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -13,7 +14,7 @@ public class DistributorController
 {
     private final IPeerConnectionService service;
 
-    public DistributorController (IPeerConnectionService service)
+    public DistributorController (@NotNull IPeerConnectionService service)
     {
         this.service = service;
     }
@@ -25,7 +26,7 @@ public class DistributorController
      * @return Response entity containing partially filled map of individual processed fragments;status 200 if full, 206 if some was lost
      */
     @PostMapping("/distribute-fragments")
-    public ResponseEntity<FragmentFetcherServiceReply> distributeFragments (@RequestBody DistributorRequest request)
+    public @NotNull ResponseEntity<ProcessedFragments> distributeFragments (@NotNull @RequestBody DistributorRequest request)
     {
         var replies = service.sendRequests(request.fragments());
         if (replies.mappedReplies().size() != request.fragments().size())
@@ -42,7 +43,7 @@ public class DistributorController
      * @apiNote The returned body object may be partially filled or empty
      */
     @GetMapping("/get-fragments")
-    public ResponseEntity<FragmentFetcherServiceReply> getFragments ()
+    public @NotNull ResponseEntity<ProcessedFragments> getFragments ()
     {
         return new ResponseEntity<>(service.getResponses(), HttpStatus.OK);
     }

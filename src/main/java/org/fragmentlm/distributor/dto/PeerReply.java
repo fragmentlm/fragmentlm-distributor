@@ -1,5 +1,7 @@
 package org.fragmentlm.distributor.dto;
 
-public record PeerReply(int errorCode, String reply)
+import jakarta.validation.constraints.NotNull;
+
+public record PeerReply(int errorCode, @NotNull String reply)
 {
 }
