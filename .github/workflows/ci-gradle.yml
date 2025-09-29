@@ -41,3 +41,6 @@ jobs:
 
       - name: Build jar
         run: ./gradlew bootJar --no-daemon --console=plain -x test
+
+      - name: Run tests
+        run: ./gradlew test
