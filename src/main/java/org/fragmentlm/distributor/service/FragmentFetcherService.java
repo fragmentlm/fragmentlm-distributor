@@ -1,6 +1,6 @@
 package org.fragmentlm.distributor.service;
 
-import org.fragmentlm.distributor.dto.FragmentFetcherServiceReply;
+import org.fragmentlm.distributor.dto.ProcessedFragments;
 import org.fragmentlm.distributor.dto.PeerReply;
 import org.fragmentlm.distributor.dto.WeightedFragment;
 import org.springframework.http.ResponseEntity;
@@ -9,7 +9,6 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 
 /**
@@ -18,12 +17,13 @@ import java.util.concurrent.CountDownLatch;
 @Service
 public class FragmentFetcherService implements IPeerConnectionService
 {
+    private final ProcessedFragments replyObject;
     private final RestTemplate restTemplate;
-    private final FragmentFetcherServiceReply replyObject = new FragmentFetcherServiceReply(new ConcurrentHashMap<>());
 
-    public FragmentFetcherService ()
+    public FragmentFetcherService (ProcessedFragments replyObject, RestTemplate restTemplate)
     {
-        this.restTemplate = new RestTemplate();
+        this.replyObject = replyObject;
+        this.restTemplate = restTemplate;
     }
 
     /**
@@ -32,7 +32,7 @@ public class FragmentFetcherService implements IPeerConnectionService
      * @param requests list of fragments to be sent
      * @return map of peer replies to their addresses
      */
-    public FragmentFetcherServiceReply sendRequests (List<WeightedFragment> requests)
+    public ProcessedFragments sendRequests (List<WeightedFragment> requests)
     {
         CountDownLatch latch = new CountDownLatch(requests.size());
         requests.forEach((weightedFragment) ->
@@ -73,7 +73,7 @@ public class FragmentFetcherService implements IPeerConnectionService
      * Gets currently present reply object
      * @return partially filled reply
      */
-    public FragmentFetcherServiceReply getResponses ()
+    public ProcessedFragments getResponses ()
     {
         return replyObject;
     }
