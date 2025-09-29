@@ -1,13 +1,18 @@
 package org.fragmentlm.distributor.service;
 
-import org.fragmentlm.distributor.dto.ProcessedFragments;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import jakarta.validation.constraints.NotNull;
 import org.fragmentlm.distributor.dto.PeerReply;
+import org.fragmentlm.distributor.dto.ProcessedFragments;
 import org.fragmentlm.distributor.dto.WeightedFragment;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 
@@ -15,12 +20,12 @@ import java.util.concurrent.CountDownLatch;
  * Service to manage connection with the peers
  */
 @Service
-public class FragmentFetcherService implements IPeerConnectionService
+public class PeerFragmentDistributionService implements IPeerConnectionService
 {
     private final ProcessedFragments replyObject;
     private final RestTemplate restTemplate;
 
-    public FragmentFetcherService (ProcessedFragments replyObject, RestTemplate restTemplate)
+    public PeerFragmentDistributionService (ProcessedFragments replyObject, RestTemplate restTemplate)
     {
         this.replyObject = replyObject;
         this.restTemplate = restTemplate;
@@ -32,7 +37,7 @@ public class FragmentFetcherService implements IPeerConnectionService
      * @param requests list of fragments to be sent
      * @return map of peer replies to their addresses
      */
-    public ProcessedFragments sendRequests (List<WeightedFragment> requests)
+    public @NotNull ProcessedFragments sendRequests (@NotNull List<WeightedFragment> requests)
     {
         CountDownLatch latch = new CountDownLatch(requests.size());
         requests.forEach((weightedFragment) ->
@@ -41,14 +46,17 @@ public class FragmentFetcherService implements IPeerConnectionService
             final String fragment = weightedFragment.fragment();
             Thread.ofVirtual().start(() ->
             {
-                final String url = "http://" + ip + "/fragmentlm/worker";
-                final String jsonRequest = "{\"fragment\":\"" + fragment + "\"}";
+                final String url = buildUrlString(ip, "/fragmentlm/worker");
+                final ObjectMapper mapper = new ObjectMapper();
+                final ObjectNode root = mapper.createObjectNode();
+                root.put("fragment", fragment);
+                final String jsonRequest = root.toString();
                 try
                 {
                     final ResponseEntity<PeerReply> reply = restTemplate.postForEntity(url, jsonRequest, PeerReply.class);
                     if (!reply.getStatusCode().is2xxSuccessful())
                     {
-                        replyObject.mappedReplies().put(ip, new PeerReply(255, ""));
+                        replyObject.mappedReplies().put(ip, new PeerReply(reply.getStatusCode().value(), ""));
                         return;
                     }
                     replyObject.mappedReplies().put(ip, reply.getBody());
@@ -69,11 +77,24 @@ public class FragmentFetcherService implements IPeerConnectionService
         return replyObject;
     }
 
+    private static @NotNull String buildUrlString (@NotNull String address, @NotNull String path)
+    {
+        try
+        {
+            final URI uri = new URI("http", address, path, null);
+            return uri.toString();
+        } catch (URISyntaxException e)
+        {
+            return "";
+        }
+    }
+
     /**
      * Gets currently present reply object
+     *
      * @return partially filled reply
      */
-    public ProcessedFragments getResponses ()
+    public @NotNull ProcessedFragments getResponses ()
     {
         return replyObject;
     }
