@@ -23,7 +23,7 @@ jobs:
       - name: Set up JDK ${{ matrix.java }}
         uses: actions/setup-java@v4
         with:
-          distribution: openjdk
+          distribution: temurin
           java-version: ${{ matrix.java }}
 
       - name: Cache Gradle
